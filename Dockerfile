@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y \
 # Enable Apache rewrite
 RUN a2enmod rewrite
 
+# Make Apache use Render's default web port 10000
+RUN sed -i 's/Listen 80/Listen 10000/g' /etc/apache2/ports.conf \
+ && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:10000>/g' /etc/apache2/sites-available/000-default.conf
+
 # Set Laravel public as document root
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
  && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/apache2.conf
@@ -38,17 +42,18 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copy full Laravel app first so artisan exists
+# Copy full Laravel app
 COPY . .
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Install frontend dependencies
+# Install frontend dependencies and build Vite assets
 RUN npm install
-
-# Build Vite assets
 RUN npm run build
+
+# Create storage symlink for public files
+RUN php artisan storage:link || true
 
 # Set permissions
 RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache public/uploads \
